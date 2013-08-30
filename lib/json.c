@@ -765,7 +765,7 @@ json_check_type(struct sr_json_value *value, enum sr_json_type type,
     if (value->type == type)
         return true;
 
-    assert(type >= SR_JSON_NONE && type <= SR_JSON_NULL);
+    assert(type > SR_JSON_NONE && type <= SR_JSON_NULL);
     char *type_str = type_names[type];
 
     if (error_message)
@@ -811,3 +811,86 @@ DEFINE_JSON_READ(json_read_uint32, uint32_t, SR_JSON_INTEGER, u.integer, NOOP)
 DEFINE_JSON_READ(json_read_uint16, uint16_t, SR_JSON_INTEGER, u.integer, NOOP)
 DEFINE_JSON_READ(json_read_string, char *, SR_JSON_STRING, u.string.ptr, sr_strdup)
 DEFINE_JSON_READ(json_read_bool, bool, SR_JSON_BOOLEAN, u.boolean, NOOP)
+
+static bool
+emit_value(struct sr_strbuf *strbuf, struct sr_json_value *val, unsigned max_depth)
+{
+    if (max_depth == 0)
+    {
+        sr_strbuf_append_str(strbuf, "null");
+        return false;
+    }
+
+    switch (val->type)
+    {
+    case SR_JSON_OBJECT:
+        sr_strbuf_append_char(strbuf, '{');
+        for (unsigned i = 0; i < val->u.object.length; i++)
+        {
+            sr_json_append_escaped(strbuf, val->u.object.values[i].name);
+            sr_strbuf_append_char(strbuf, ':');
+            if (!emit_value(strbuf, val->u.object.values[i].value, max_depth-1))
+                return false;
+            if (i+1 < val->u.object.length)
+                sr_strbuf_append_char(strbuf, ',');
+        }
+        sr_strbuf_append_char(strbuf, '}');
+        break;
+    case SR_JSON_ARRAY:
+        sr_strbuf_append_char(strbuf, '[');
+        for (unsigned i = 0; i < val->u.array.length; i++)
+        {
+            if (!emit_value(strbuf, val->u.array.values[i], max_depth-1))
+                return false;
+            if (i+1 < val->u.array.length)
+                sr_strbuf_append_char(strbuf, ',');
+        }
+        sr_strbuf_append_char(strbuf, ']');
+        break;
+    case SR_JSON_INTEGER:
+        sr_strbuf_append_strf(strbuf, "%lld", val->u.integer);
+        break;
+    case SR_JSON_DOUBLE:
+        sr_strbuf_append_strf(strbuf, "%g", val->u.dbl);
+        break;
+    case SR_JSON_STRING:
+        sr_json_append_escaped(strbuf, val->u.string.ptr);
+        break;
+    case SR_JSON_BOOLEAN:
+        sr_strbuf_append_str(strbuf, val->u.boolean ? "true" : "false");
+        break;
+    case SR_JSON_NULL:
+        sr_strbuf_append_str(strbuf, "null");
+        break;
+    default:
+        abort();
+        break;
+    }
+
+    return true;
+}
+
+char *
+sr_json_remove_whitespace(const char *json_str)
+{
+    char *error_message = NULL;
+    struct sr_json_value *json_root = sr_json_parse(json_str, &error_message);
+    if (!json_root)
+    {
+        free(error_message);
+        return NULL;
+    }
+
+    struct sr_strbuf *strbuf = sr_strbuf_new();
+    bool ok = emit_value(strbuf, json_root, 256);
+
+    sr_json_value_free(json_root);
+
+    if (!ok)
+    {
+        sr_strbuf_free(strbuf);
+        return NULL;
+    }
+
+    return sr_strbuf_free_nobuf(strbuf);
+}

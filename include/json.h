@@ -124,6 +124,10 @@ sr_json_escape(const char *text);
 struct sr_strbuf*
 sr_json_append_escaped(struct sr_strbuf *strbuf, const char *str);
 
+/* Returns NULL on too deep recursion. */
+char *
+sr_json_remove_whitespace(const char *json_str);
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif

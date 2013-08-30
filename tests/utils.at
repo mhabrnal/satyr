@@ -551,3 +551,38 @@ int main(void)
   return 0;
 }
 ]])
+
+## ------------------------- ##
+## sr_json_remove_whitespace ##
+## ------------------------- ##
+
+AT_TESTFUN([sr_json_remove_whitespace],
+[[
+#include "utils.h"
+#include <assert.h>
+#include <string.h>
+
+void check(char *in, char *expected)
+{
+  printf("%s\n", in);
+  char *minimized = sr_json_remove_whitespace(in);
+  assert(minimized);
+  assert(0 == strcmp(minimized, expected));
+  free (minimized);
+}
+
+int main(void)
+{
+  check("42", "42");
+  check("null", "null");
+  check("true", "true");
+  check("  1.337", "1.337");
+  check("[]", "[]");
+  check("[ ]", "[]");
+  check(" { } ", "{}");
+  check(" { \"foo\" : [ \"bar\"    ]  } ", "{\"foo\":[\"bar\"]}");
+  check("{\"\" : {\"\":{\"\":{\"\":{\"\":[ null ] } } } } }","{\"\":{\"\":{\"\":{\"\":{\"\":[null]}}}}}");
+
+  return 0;
+}
+]])
